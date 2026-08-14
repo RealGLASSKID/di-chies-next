@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Eye } from "lucide-react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -42,7 +44,7 @@ export default function AdminBookingsPage() {
         .select("*")
         .order("created_at", { ascending: false })
         .limit(150);
-      if (filter !== "all") q = q.eq("status", filter);
+      if (filter !== "all") q = q.eq("status", filter as BookingStatus);
       const { data, error } = await q;
       if (error) throw error;
       return data;
@@ -63,12 +65,9 @@ export default function AdminBookingsPage() {
   return (
     <AdminShell
       title="Bookings"
-      description="View and update order status."
+      description="Click View to open full order details and line items."
       actions={
-        <Select
-          value={filter}
-          onValueChange={(value) => setFilter(value as BookingStatus | "all")}
-        >
+        <Select value={filter} onValueChange={(v) => setFilter(v as BookingStatus | "all")}>
           <SelectTrigger className="w-44">
             <SelectValue placeholder="Filter status" />
           </SelectTrigger>
@@ -83,7 +82,7 @@ export default function AdminBookingsPage() {
         </Select>
       }
     >
-      <div className="overflow-x-auto rounded-md border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
@@ -93,26 +92,31 @@ export default function AdminBookingsPage() {
               <TableHead>Items</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="w-24">Detail</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {bookings.isLoading && (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+                <TableCell colSpan={7} className="text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {!bookings.isLoading && (bookings.data?.length ?? 0) === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   No bookings found.
                 </TableCell>
               </TableRow>
             )}
             {bookings.data?.map((b) => (
               <TableRow key={b.id}>
-                <TableCell className="font-semibold">{b.reference || "—"}</TableCell>
+                <TableCell className="font-semibold">
+                  <Link href={`/admin/bookings/${b.id}`} className="hover:underline">
+                    {b.reference || "—"}
+                  </Link>
+                </TableCell>
                 <TableCell>
                   <div>{b.customer_name}</div>
                   <div className="text-xs text-muted-foreground">{b.customer_email}</div>
@@ -122,7 +126,7 @@ export default function AdminBookingsPage() {
                   {formatDateTime(b.created_at)}
                 </TableCell>
                 <TableCell>{b.item_count}</TableCell>
-                <TableCell>{formatNaira(b.total)}</TableCell>
+                <TableCell>{formatNaira(Number(b.total))}</TableCell>
                 <TableCell>
                   <Select
                     value={b.status}
@@ -139,6 +143,14 @@ export default function AdminBookingsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </TableCell>
+                <TableCell>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/admin/bookings/${b.id}`}>
+                      <Eye className="mr-1.5 size-4" />
+                      View
+                    </Link>
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}

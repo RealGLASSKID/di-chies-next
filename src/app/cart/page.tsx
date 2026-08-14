@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Minus, Plus, ShoppingBasket, Trash2 } from "lucide-react";
 
@@ -23,7 +23,23 @@ function CartPage() {
   const { user, profile } = useAuth();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", date: "", time: "", notes: "" });
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    date: "",
+    time: "",
+    notes: "",
+  });
+
+  // Prefill name/phone from profile once (so state matches what the user sees)
+  useEffect(() => {
+    if (!profile) return;
+    setForm((prev) => ({
+      ...prev,
+      name: prev.name || profile.full_name || "",
+      phone: prev.phone || profile.phone || "",
+    }));
+  }, [profile]);
 
   async function submitBooking(event: React.FormEvent) {
     event.preventDefault();
@@ -32,20 +48,27 @@ function CartPage() {
       router.push("/login");
       return;
     }
-    if (!form.name.trim() || !form.phone.trim() || !form.date || !form.time) {
+
+    const name = form.name.trim();
+    const phone = form.phone.trim();
+    const date = form.date.trim();
+    const time = form.time.trim();
+
+    if (!name || !phone || !date || !time) {
       toast.error("Name, phone, collection date and time are required.");
       return;
     }
+
     setSubmitting(true);
     try {
       const { data: booking, error } = await supabase
         .from("bookings")
         .insert({
           user_id: user.id,
-          customer_name: form.name.trim().slice(0, 120),
-          customer_phone: form.phone.trim().slice(0, 30),
+          customer_name: name.slice(0, 120),
+          customer_phone: phone.slice(0, 30),
           customer_email: user.email ?? "",
-          notes: [`Collection: ${form.date} ${form.time}`, form.notes.trim()]
+          notes: [`Collection: ${date} ${time}`, form.notes.trim()]
             .filter(Boolean)
             .join(" — ")
             .slice(0, 500),
@@ -74,7 +97,9 @@ function CartPage() {
       toast.success(`Booking ${booking.reference} confirmed.`);
       router.push("/account/bookings");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create your booking.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not create your booking.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -83,12 +108,16 @@ function CartPage() {
   if (lines.length === 0) {
     return (
       <SiteLayout>
-        <PageHeader eyebrow="Booking" title="Your basket" />
-        <div className="container-page py-16">
+        <PageHeader
+          eyebrow="Cart"
+          title="Your basket"
+          description="Reserve items for collection at DI CHIES."
+        />
+        <div className="container-page py-12">
           <EmptyState
             icon={<ShoppingBasket className="size-8" aria-hidden />}
-            title="Your basket is empty"
-            description="Add products from any department and they'll appear here, ready to reserve."
+            title="Your cart is empty"
+            description="Browse the shop and add products to reserve them for collection."
             action={
               <Button asChild>
                 <Link href="/shop">Start shopping</Link>
@@ -103,73 +132,83 @@ function CartPage() {
   return (
     <SiteLayout>
       <PageHeader
-        eyebrow="Booking"
+        eyebrow="Cart"
         title="Your basket"
-        description="Collection only — choose a slot and pay at the DI CHIES collection desk."
+        description="Review items and book a collection slot."
       />
-      <div className="container-page grid gap-10 py-10 lg:grid-cols-[1fr_22rem]">
-        <ul className="divide-y divide-border rounded-md border border-border">
+      <div className="container-page grid gap-8 py-10 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-4">
           {lines.map((line) => (
-            <li key={line.product.id} className="flex gap-4 p-4">
-              <ProductImage
-                src={line.product.image_url}
-                alt={line.product.name}
-                className="size-24 shrink-0 rounded-sm"
-              />
-              <div className="flex flex-1 flex-col">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-sm font-semibold">
-                      <Link href={`/products/${line.product.slug }`} className="hover:underline">
-                        {line.product.name}
-                      </Link>
-                    </h2>
-                    <p className="text-xs text-muted-foreground">
-                      {line.product.brand} · per {line.product.unit}
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold">
-                    {formatNaira(effectivePrice(line.product) * line.quantity)}
-                  </p>
-                </div>
-                <div className="mt-auto flex items-center gap-3 pt-3">
-                  <div className="flex items-center rounded-md border border-border">
+            <div
+              key={line.product.id}
+              className="flex gap-4 rounded-md border border-border p-4"
+            >
+              <div className="size-20 shrink-0 overflow-hidden rounded-md border border-border">
+                <ProductImage
+                  src={line.product.image_url}
+                  alt={line.product.name}
+                  className="size-full"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{line.product.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {line.product.brand}
+                  {line.product.unit ? ` · per ${line.product.unit}` : ""}
+                </p>
+                <p className="mt-1 font-semibold">
+                  {formatNaira(effectivePrice(line.product) * line.quantity)}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 rounded-md border border-border">
                     <Button
-                      variant="ghost"
+                      type="button"
                       size="icon"
-                      aria-label={`Decrease ${line.product.name}`}
-                      onClick={() => setQuantity(line.product.id, line.quantity - 1)}
+                      variant="ghost"
+                      className="size-8"
+                      onClick={() =>
+                        setQuantity(line.product.id, Math.max(0, line.quantity - 1))
+                      }
                     >
-                      <Minus className="size-4" aria-hidden />
+                      <Minus className="size-4" />
                     </Button>
-                    <span className="w-9 text-center text-sm font-semibold">{line.quantity}</span>
+                    <span className="w-8 text-center text-sm">{line.quantity}</span>
                     <Button
-                      variant="ghost"
+                      type="button"
                       size="icon"
-                      aria-label={`Increase ${line.product.name}`}
-                      onClick={() => setQuantity(line.product.id, line.quantity + 1)}
+                      variant="ghost"
+                      className="size-8"
+                      onClick={() =>
+                        setQuantity(line.product.id, line.quantity + 1)
+                      }
                     >
-                      <Plus className="size-4" aria-hidden />
+                      <Plus className="size-4" />
                     </Button>
                   </div>
                   <Button
-                    variant="ghost"
+                    type="button"
                     size="sm"
+                    variant="ghost"
+                    className="text-destructive"
                     onClick={() => removeItem(line.product.id)}
-                    aria-label={`Remove ${line.product.name}`}
                   >
-                    <Trash2 className="mr-1 size-4" aria-hidden />
+                    <Trash2 className="mr-1 size-4" />
                     Remove
                   </Button>
                 </div>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
 
-        <form onSubmit={submitBooking} className="h-fit rounded-md border border-border p-6">
-          <h2 className="text-lg font-semibold">Collection details</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Subtotal {formatNaira(subtotal)}</p>
+        <form
+          onSubmit={submitBooking}
+          className="h-fit rounded-md border border-border p-6"
+        >
+          <h2 className="font-display text-lg font-bold">Collection details</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Subtotal {formatNaira(subtotal)}
+          </p>
 
           <div className="mt-6 space-y-4">
             <div>
@@ -178,8 +217,10 @@ function CartPage() {
                 id="booking-name"
                 required
                 maxLength={120}
-                value={form.name || profile?.full_name || ""}
-                onChange={(event) => setForm({ ...form, name: event.target.value })}
+                value={form.name}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, name: e.target.value }))
+                }
               />
             </div>
             <div>
@@ -188,8 +229,10 @@ function CartPage() {
                 id="booking-phone"
                 required
                 maxLength={30}
-                value={form.phone || profile?.phone || ""}
-                onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, phone: e.target.value }))
+                }
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -200,7 +243,9 @@ function CartPage() {
                   type="date"
                   required
                   value={form.date}
-                  onChange={(event) => setForm({ ...form, date: event.target.value })}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, date: e.target.value }))
+                  }
                 />
               </div>
               <div>
@@ -210,7 +255,9 @@ function CartPage() {
                   type="time"
                   required
                   value={form.time}
-                  onChange={(event) => setForm({ ...form, time: event.target.value })}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, time: e.target.value }))
+                  }
                 />
               </div>
             </div>
@@ -220,7 +267,9 @@ function CartPage() {
                 id="booking-notes"
                 maxLength={500}
                 value={form.notes}
-                onChange={(event) => setForm({ ...form, notes: event.target.value })}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
               />
             </div>
           </div>
@@ -230,7 +279,7 @@ function CartPage() {
           </Button>
           {!user && (
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              You'll need to{" "}
+              You&apos;ll need to{" "}
               <Link href="/login" className="font-semibold underline">
                 sign in
               </Link>{" "}
@@ -242,6 +291,5 @@ function CartPage() {
     </SiteLayout>
   );
 }
-
 
 export default CartPage;
