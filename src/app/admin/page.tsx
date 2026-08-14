@@ -1,151 +1,171 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { toast } from "sonner";
+import { Package, FolderTree, ClipboardList, TrendingUp } from "lucide-react";
 
-import { PageHeader, SiteLayout } from "@/components/layout/SiteLayout";
+import { AdminShell } from "@/components/admin/AdminShell";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useAuth } from "@/hooks/useAuth";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  BOOKING_STATUSES,
   formatDate,
   formatNaira,
   statusLabels,
   type BookingStatus,
 } from "@/lib/format";
 
-function AdminPage() {
-  const { user, isAdmin, loading } = useAuth();
-  const queryClient = useQueryClient();
+export default function AdminDashboardPage() {
+  const stats = useQuery({
+    queryKey: ["admin-dashboard-stats"],
+    queryFn: async () => {
+      const [products, categories, bookings, pending] = await Promise.all([
+        supabase.from("products").select("id", { count: "exact", head: true }),
+        supabase.from("categories").select("id", { count: "exact", head: true }),
+        supabase.from("bookings").select("id", { count: "exact", head: true }),
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending"),
+      ]);
+      return {
+        products: products.count ?? 0,
+        categories: categories.count ?? 0,
+        bookings: bookings.count ?? 0,
+        pending: pending.count ?? 0,
+      };
+    },
+  });
 
-  const bookings = useQuery({
-    queryKey: ["admin-bookings"],
-    enabled: isAdmin,
+  const recent = useQuery({
+    queryKey: ["admin-recent-bookings"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("bookings")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(8);
       if (error) throw error;
       return data;
     },
   });
 
-  const stats = useQuery({
-    queryKey: ["admin-stats"],
-    enabled: isAdmin,
-    queryFn: async () => {
-      const [products, categories] = await Promise.all([
-        supabase.from("products").select("id", { count: "exact", head: true }),
-        supabase.from("categories").select("id", { count: "exact", head: true }),
-      ]);
-      return { products: products.count ?? 0, categories: categories.count ?? 0 };
+  const cards = [
+    {
+      label: "Products",
+      value: stats.data?.products ?? "—",
+      icon: Package,
+      href: "/admin/products",
     },
-  });
-
-  async function updateStatus(id: string, status: BookingStatus) {
-    const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: ["admin-bookings"] });
-    toast.success("Booking updated.");
-  }
-
-  if (loading) {
-    return (
-      <SiteLayout>
-        <div className="container-page py-20 text-sm text-muted-foreground">Checking access…</div>
-      </SiteLayout>
-    );
-  }
-
-  if (!user || !isAdmin) {
-    return (
-      <SiteLayout>
-        <div className="container-page py-20">
-          <EmptyState
-            title="Admin access required"
-            description="Sign in with a DI CHIES staff account to open the console."
-            action={
-              <Button asChild>
-                <Link href="/login">Sign in</Link>
-              </Button>
-            }
-          />
-        </div>
-      </SiteLayout>
-    );
-  }
+    {
+      label: "Categories",
+      value: stats.data?.categories ?? "—",
+      icon: FolderTree,
+      href: "/admin/categories",
+    },
+    {
+      label: "Total bookings",
+      value: stats.data?.bookings ?? "—",
+      icon: ClipboardList,
+      href: "/admin/bookings",
+    },
+    {
+      label: "Pending",
+      value: stats.data?.pending ?? "—",
+      icon: TrendingUp,
+      href: "/admin/bookings",
+    },
+  ];
 
   return (
-    <SiteLayout>
-      <PageHeader eyebrow="Staff" title="Admin console" description="Bookings and catalogue overview." />
-      <div className="container-page py-10">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-md border border-border p-5">
-            <p className="eyebrow">Bookings</p>
-            <p className="mt-1 text-2xl font-semibold">{bookings.data?.length ?? 0}</p>
-          </div>
-          <div className="rounded-md border border-border p-5">
-            <p className="eyebrow">Products</p>
-            <p className="mt-1 text-2xl font-semibold">{stats.data?.products ?? 0}</p>
-          </div>
-          <div className="rounded-md border border-border p-5">
-            <p className="eyebrow">Departments</p>
-            <p className="mt-1 text-2xl font-semibold">{stats.data?.categories ?? 0}</p>
-          </div>
+    <AdminShell
+      title="Dashboard"
+      description="Overview of catalogue and bookings."
+      actions={
+        <Button asChild size="sm">
+          <Link href="/admin/products">Add product</Link>
+        </Button>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Link key={card.label} href={card.href}>
+              <Card className="transition-colors hover:border-primary/40">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {card.label}
+                  </CardTitle>
+                  <Icon className="size-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{card.value}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="mt-8">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Recent bookings</h2>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/bookings">View all</Link>
+          </Button>
         </div>
 
-        <div className="mt-10 overflow-x-auto rounded-md border border-border">
+        <div className="overflow-x-auto rounded-md border border-border">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Reference</TableHead>
                 <TableHead>Customer</TableHead>
-                <TableHead>Placed</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {bookings.data?.map((booking) => (
-                <TableRow key={booking.id}>
-                  <TableCell className="font-semibold">{booking.reference}</TableCell>
-                  <TableCell>
-                    {booking.customer_name}
-                    <span className="block text-xs text-muted-foreground">{booking.customer_phone}</span>
+              {recent.isLoading && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    Loading…
                   </TableCell>
+                </TableRow>
+              )}
+              {!recent.isLoading && (recent.data?.length ?? 0) === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    No bookings yet.
+                  </TableCell>
+                </TableRow>
+              )}
+              {recent.data?.map((b) => (
+                <TableRow key={b.id}>
+                  <TableCell className="font-medium">{b.reference || "—"}</TableCell>
                   <TableCell>
-                    {formatDate(booking.created_at)}
+                    {b.customer_name}
                     <span className="block text-xs text-muted-foreground">
-                      {booking.item_count} items
+                      {b.customer_phone}
                     </span>
                   </TableCell>
-                  <TableCell>{formatNaira(booking.total)}</TableCell>
+                  <TableCell>{formatDate(b.created_at)}</TableCell>
+                  <TableCell>{formatNaira(b.total)}</TableCell>
                   <TableCell>
-                    <Select
-                      value={booking.status}
-                      onValueChange={(value) => void updateStatus(booking.id, value as BookingStatus)}
-                    >
-                      <SelectTrigger className="w-48" aria-label="Booking status">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BOOKING_STATUSES.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {statusLabels[status]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Badge variant="secondary">
+                      {statusLabels[b.status as BookingStatus] ?? b.status}
+                    </Badge>
                   </TableCell>
                 </TableRow>
               ))}
@@ -153,9 +173,6 @@ function AdminPage() {
           </Table>
         </div>
       </div>
-    </SiteLayout>
+    </AdminShell>
   );
 }
-
-
-export default AdminPage;
