@@ -32,7 +32,7 @@ import {
 
 export default function AdminBookingsPage() {
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<BookingStatus | "all">("all");
 
   const bookings = useQuery({
     queryKey: ["admin-bookings", filter],
@@ -65,7 +65,10 @@ export default function AdminBookingsPage() {
       title="Bookings"
       description="View and update order status."
       actions={
-        <Select value={filter} onValueChange={setFilter}>
+        <Select
+          value={filter}
+          onValueChange={(value) => setFilter(value as BookingStatus | "all")}
+        >
           <SelectTrigger className="w-44">
             <SelectValue placeholder="Filter status" />
           </SelectTrigger>

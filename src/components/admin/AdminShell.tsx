@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  Tag,
 } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,6 +27,7 @@ const nav = [
   { href: "/admin/bookings", label: "Bookings", icon: ClipboardList },
   { href: "/admin/products", label: "Products", icon: Package },
   { href: "/admin/categories", label: "Categories", icon: FolderTree },
+  { href: "/admin/promotions", label: "Promotions", icon: Tag },
   { href: "/admin/users", label: "Users", icon: Users },
 ];
 
@@ -76,17 +78,25 @@ export function AdminShell({
   }
 
   const Sidebar = (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-card">
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-        <span className="font-display text-sm font-bold tracking-[0.15em] uppercase">
-          DI CHIES
-        </span>
-        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">
-          Admin
-        </span>
+        <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+          <Store className="size-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-display text-sm font-bold tracking-[0.12em] uppercase leading-none">
+            DI CHIES
+          </p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Admin console
+          </p>
+        </div>
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Manage
+        </p>
         {nav.map((item) => {
           const active = item.exact
             ? pathname === item.href
@@ -98,7 +108,7 @@ export function AdminShell({
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
                 active
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -111,15 +121,15 @@ export function AdminShell({
         })}
       </nav>
 
-      <div className="border-t border-border p-3 space-y-1">
-        <div className="px-3 py-2">
+      <div className="space-y-1 border-t border-border p-3">
+        <div className="mb-2 rounded-md bg-muted/50 px-3 py-2">
           <p className="truncate text-sm font-medium">
             {profile?.full_name || user.email}
           </p>
           <p className="truncate text-xs text-muted-foreground">{user.email}</p>
         </div>
         <Button variant="ghost" size="sm" className="w-full justify-start" asChild>
-          <Link href="/">
+          <Link href="/" target="_blank">
             <Store className="mr-2 size-4" />
             View storefront
           </Link>
@@ -138,24 +148,23 @@ export function AdminShell({
   );
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-56 shrink-0 border-r border-border bg-card lg:block">
+    <div className="flex min-h-screen bg-muted/30">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-border lg:block">
         {Sidebar}
       </aside>
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
             className="absolute inset-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute left-0 top-0 h-full w-64 border-r border-border bg-card shadow-xl">
+          <aside className="absolute left-0 top-0 h-full w-72 border-r border-border bg-card shadow-xl">
             <button
               type="button"
-              className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:bg-muted"
+              className="absolute right-3 top-3 z-10 rounded-md p-1 text-muted-foreground hover:bg-muted"
               onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
             >
               <X className="size-5" />
             </button>
@@ -164,14 +173,14 @@ export function AdminShell({
         </div>
       )}
 
-      {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur lg:px-6">
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
           <Button
             variant="ghost"
             size="icon"
             className="lg:hidden"
             onClick={() => setMobileOpen(true)}
+            aria-label="Open menu"
           >
             <Menu className="size-5" />
           </Button>

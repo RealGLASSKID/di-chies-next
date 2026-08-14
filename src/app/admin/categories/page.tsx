@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ImageUploadField } from "@/components/admin/ImageUploadField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -127,11 +128,17 @@ export default function AdminCategoriesPage() {
     toast.success(editing ? "Category updated" : "Category created");
     setOpen(false);
     await queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin-categories-list"] });
     await queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
   }
 
   async function remove(id: string, name: string) {
-    if (!confirm(`Delete category "${name}"? Products in it may block this.`)) return;
+    if (
+      !confirm(
+        `Delete category “${name}”? Products in this category must be moved or deleted first.`,
+      )
+    )
+      return;
     const { error } = await supabase.from("categories").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -144,7 +151,7 @@ export default function AdminCategoriesPage() {
   return (
     <AdminShell
       title="Categories"
-      description="Manage shop departments."
+      description="Organise the store into departments. Products are assigned to these."
       actions={
         <Button size="sm" onClick={openCreate}>
           <Plus className="mr-1.5 size-4" />
@@ -152,10 +159,11 @@ export default function AdminCategoriesPage() {
         </Button>
       }
     >
-      <div className="overflow-x-auto rounded-md border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-14">Image</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Slug</TableHead>
               <TableHead>Order</TableHead>
@@ -166,40 +174,63 @@ export default function AdminCategoriesPage() {
           <TableBody>
             {categories.isLoading && (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
+                <TableCell colSpan={6} className="text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {!categories.isLoading && (categories.data?.length ?? 0) === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
-                  No categories yet.
+                <TableCell
+                  colSpan={6}
+                  className="py-10 text-center text-muted-foreground"
+                >
+                  No categories yet. Add one to start building the catalogue.
                 </TableCell>
               </TableRow>
             )}
             {categories.data?.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">
-                  {c.name}
-                  {c.age_restricted && (
-                    <Badge variant="outline" className="ml-2">
-                      18+
-                    </Badge>
+                <TableCell>
+                  <div className="size-10 overflow-hidden rounded-md border border-border bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={
+                        c.image_url ||
+                        "https://placehold.co/80x80/e4e4e7/18181b?text=—"
+                      }
+                      alt=""
+                      className="size-full object-cover"
+                    />
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="font-medium">{c.name}</div>
+                  {c.description && (
+                    <div className="line-clamp-1 text-xs text-muted-foreground">
+                      {c.description}
+                    </div>
                   )}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{c.slug}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {c.slug}
+                </TableCell>
                 <TableCell>{c.sort_order}</TableCell>
-                <TableCell>
+                <TableCell className="space-x-1">
                   {c.is_active ? (
                     <Badge variant="secondary">Active</Badge>
                   ) : (
                     <Badge variant="destructive">Hidden</Badge>
                   )}
+                  {c.age_restricted && <Badge variant="outline">18+</Badge>}
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(c)}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => openEdit(c)}
+                    >
                       <Pencil className="size-4" />
                     </Button>
                     <Button
@@ -218,11 +249,21 @@ export default function AdminCategoriesPage() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit category" : "Add category"}</DialogTitle>
+            <DialogTitle>
+              {editing ? "Edit category" : "Add category"}
+            </DialogTitle>
           </DialogHeader>
+
           <div className="grid gap-4 py-2">
+            <ImageUploadField
+              value={form.image_url}
+              onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+              label="Category image"
+              folder="categories"
+            />
+
             <div className="grid gap-2">
               <Label>Name *</Label>
               <Input
@@ -231,7 +272,7 @@ export default function AdminCategoriesPage() {
                   setForm((f) => ({
                     ...f,
                     name: e.target.value,
-                    slug: f.slug || slugify(e.target.value),
+                    slug: editing ? f.slug : slugify(e.target.value),
                   }))
                 }
               />
@@ -240,22 +281,9 @@ export default function AdminCategoriesPage() {
               <Label>Slug</Label>
               <Input
                 value={form.slug}
-                onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Sort order</Label>
-              <Input
-                type="number"
-                value={form.sort_order}
-                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Image URL</Label>
-              <Input
-                value={form.image_url}
-                onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, slug: e.target.value }))
+                }
               />
             </div>
             <div className="grid gap-2">
@@ -263,10 +291,22 @@ export default function AdminCategoriesPage() {
               <Textarea
                 rows={2}
                 value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
               />
             </div>
-            <div className="flex gap-4">
+            <div className="grid gap-2">
+              <Label>Sort order</Label>
+              <Input
+                type="number"
+                value={form.sort_order}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, sort_order: e.target.value }))
+                }
+              />
+            </div>
+            <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={form.is_active}
@@ -287,6 +327,7 @@ export default function AdminCategoriesPage() {
               </label>
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
