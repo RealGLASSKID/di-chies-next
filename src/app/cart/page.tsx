@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { effectivePrice, formatNaira } from "@/lib/format";
 
 function CartPage() {
-  const { lines, subtotal, setQuantity, removeItem, clear } = useCart();
+  const { lines, subtotal, setQuantity, removeItem, clear, isAdmin } = useCart();
   const { user, profile } = useAuth();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -110,6 +110,30 @@ function CartPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (isAdmin) {
+    return (
+      <SiteLayout>
+        <PageHeader
+          eyebrow="Cart"
+          title="Not available for admins"
+          description="You're signed in as the store admin — bookings are for customers only."
+        />
+        <div className="container-page py-12">
+          <EmptyState
+            icon={<ShoppingBasket className="size-8" aria-hidden />}
+            title="Nothing to book here"
+            description="Manage products, categories and customer bookings from the admin console instead."
+            action={
+              <Button asChild>
+                <Link href="/admin">Go to admin console</Link>
+              </Button>
+            }
+          />
+        </div>
+      </SiteLayout>
+    );
   }
 
   if (lines.length === 0) {

@@ -19,7 +19,7 @@ function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: product, isPending } = useQuery(productBySlugQuery(slug));
   const { data: categories } = useQuery(categoriesQuery);
-  const { addItem } = useCart();
+  const { addItem, isAdmin } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [active, setActive] = useState(0);
 
@@ -139,35 +139,46 @@ function ProductPage() {
 
             <p className="mt-6 text-sm leading-relaxed text-muted-foreground">{product.description}</p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <div className="flex items-center rounded-md border border-border">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Decrease quantity"
-                  onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-                >
-                  <Minus className="size-4" aria-hidden />
+            {isAdmin ? (
+              <div className="mt-8 rounded-md border border-border bg-surface p-4 text-sm text-muted-foreground">
+                You&apos;re signed in as the store admin — bookings are for customers only. Manage this
+                product from the{" "}
+                <Link href="/admin/products" className="font-medium text-foreground underline">
+                  admin console
+                </Link>
+                .
+              </div>
+            ) : (
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <div className="flex items-center rounded-md border border-border">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Decrease quantity"
+                    onClick={() => setQuantity((value) => Math.max(1, value - 1))}
+                  >
+                    <Minus className="size-4" aria-hidden />
+                  </Button>
+                  <span className="w-10 text-center text-sm font-semibold">{quantity}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Increase quantity"
+                    onClick={() =>
+                      setQuantity((value) => Math.min(product.stock_quantity || 99, value + 1))
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden />
+                  </Button>
+                </div>
+                <Button size="lg" disabled={outOfStock} onClick={() => addItem(product, quantity)}>
+                  Add to booking
                 </Button>
-                <span className="w-10 text-center text-sm font-semibold">{quantity}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Increase quantity"
-                  onClick={() =>
-                    setQuantity((value) => Math.min(product.stock_quantity || 99, value + 1))
-                  }
-                >
-                  <Plus className="size-4" aria-hidden />
+                <Button size="lg" variant="outline" asChild>
+                  <Link href="/cart">View basket</Link>
                 </Button>
               </div>
-              <Button size="lg" disabled={outOfStock} onClick={() => addItem(product, quantity)}>
-                Add to booking
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link href="/cart">View basket</Link>
-              </Button>
-            </div>
+            )}
 
             <div className="mt-8 flex items-start gap-3 rounded-md border border-border bg-surface p-4">
               <Store className="mt-0.5 size-5" aria-hidden />

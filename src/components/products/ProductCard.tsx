@@ -19,7 +19,7 @@ export function ProductCard({
   categoryName?: string | undefined;
   onQuickView?: ((product: Product) => void) | undefined;
 }) {
-  const { addItem } = useCart();
+  const { addItem, isAdmin } = useCart();
   const saving = discountPercent(product);
   const outOfStock = !product.is_available || product.stock_quantity <= 0;
 
@@ -74,16 +74,18 @@ export function ProductCard({
         </div>
 
         <div className="mt-4 flex items-center gap-2">
-          <Button
-            size="sm"
-            className="flex-1"
-            disabled={outOfStock}
-            onClick={() => addItem(product)}
-            aria-label={`Add ${product.name} to cart`}
-          >
-            <ShoppingBag className="mr-1 size-4" aria-hidden />
-            Add
-          </Button>
+          {!isAdmin && (
+            <Button
+              size="sm"
+              className="flex-1"
+              disabled={outOfStock}
+              onClick={() => addItem(product)}
+              aria-label={`Add ${product.name} to cart`}
+            >
+              <ShoppingBag className="mr-1 size-4" aria-hidden />
+              Add
+            </Button>
+          )}
           {onQuickView && (
             <Button
               size="sm"

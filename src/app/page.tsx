@@ -76,7 +76,7 @@ function HomePage() {
           </div>
           <div className="relative">
             <img
-              src="https://placehold.co/1200x900/18181b/fafafa?text=DI+CHIES"
+              src="https://xdsddhxiyvqlydubxdvl.supabase.co/storage/v1/object/public/product-images/images/hero-portrait.jfif"
               alt="Monochrome interior of the DI CHIES supermarket with stocked shelves"
               className="aspect-4/3 w-full rounded-md border border-border object-cover shadow-lift"
             />

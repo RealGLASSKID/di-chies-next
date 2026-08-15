@@ -21,6 +21,7 @@ type CartContextValue = {
   count: number;
   subtotal: number;
   loading: boolean;
+  isAdmin: boolean;
   addItem: (product: Product, quantity?: number) => void;
   setQuantity: (productId: string, quantity: number) => void;
   removeItem: (productId: string) => void;
@@ -32,6 +33,7 @@ const CartContext = createContext<CartContextValue>({
   count: 0,
   subtotal: 0,
   loading: false,
+  isAdmin: false,
   addItem: () => {},
   setQuantity: () => {},
   removeItem: () => {},
@@ -52,7 +54,7 @@ function writeGuestCart(entries: Entries) {
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [guestEntries, setGuestEntries] = useState<Entries>({});
   const [hydrated, setHydrated] = useState(false);
@@ -140,11 +142,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback(
     (product: Product, quantity = 1) => {
+      if (isAdmin) {
+        toast.error("You're signed in as the store admin — bookings are for customers only.");
+        return;
+      }
       const current = entries[product.id] ?? 0;
       updateEntry(product.id, current + quantity);
       toast.success(`${product.name} added to cart`);
     },
-    [entries, updateEntry],
+    [entries, isAdmin, updateEntry],
   );
 
   const removeItem = useCallback(
@@ -181,12 +187,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       count: Object.values(entries).reduce((sum, quantity) => sum + quantity, 0),
       subtotal: lines.reduce((sum, line) => sum + effectivePrice(line.product) * line.quantity, 0),
       loading: (!!userId && dbLoading) || productsLoading,
+      isAdmin,
       addItem,
       setQuantity: updateEntry,
       removeItem,
       clear,
     }),
-    [addItem, clear, dbLoading, entries, lines, productsLoading, removeItem, updateEntry, userId],
+    [addItem, clear, dbLoading, entries, isAdmin, lines, productsLoading, removeItem, updateEntry, userId],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

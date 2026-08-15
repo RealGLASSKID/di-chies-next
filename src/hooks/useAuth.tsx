@@ -96,3 +96,29 @@ export async function signOutCompletely(queryClient: ReturnType<typeof useQueryC
   queryClient.clear();
   await supabase.auth.signOut();
 }
+
+// Looks up whether a just-signed-in user is an admin and returns where they
+// should land. Used right after sign-in (password or OAuth) instead of
+// waiting on the AuthProvider's own queries, which may not have refreshed
+// yet at that exact moment.
+export async function resolveAuthDestination(userId: string | undefined): Promise<string> {
+  if (!userId) return "/account";
+  const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  if (error) return "/account";
+  const isAdmin = (data ?? []).some((row) => row.role === "admin");
+  return isAdmin ? "/admin" : "/account";
+}
+
+// Turns a name or email into a 1-2 letter avatar label, e.g.
+// "Glass Kid" -> "GK", "glasskid01@gmail.com" -> "GL".
+export function getInitials(profile: Profile | null, user: User | null): string {
+  const fullName = profile?.full_name?.trim() || (user?.user_metadata?.full_name as string | undefined)?.trim();
+  if (fullName) {
+    const parts = fullName.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  }
+  const email = user?.email;
+  if (email) return email.slice(0, 2).toUpperCase();
+  return "?";
+}

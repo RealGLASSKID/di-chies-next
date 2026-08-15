@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { signOutCompletely, useAuth } from "@/hooks/useAuth";
+import { getInitials, signOutCompletely, useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
 import { categoriesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -44,7 +44,7 @@ export function Wordmark({ className }: { className?: string }) {
 export function SiteHeader() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { count } = useCart();
+  const { count, isAdmin } = useCart();
   const { user, profile, isAdmin } = useAuth();
   const { data: categories } = useQuery(categoriesQuery);
   const [term, setTerm] = useState("");
@@ -90,9 +90,11 @@ export function SiteHeader() {
                   {link.label}
                 </Link>
               ))}
-              <Link href="/cart" className="rounded-sm px-3 py-3 text-sm font-medium hover:bg-accent">
-                Cart ({count})
-              </Link>
+              {!isAdmin && (
+                <Link href="/cart" className="rounded-sm px-3 py-3 text-sm font-medium hover:bg-accent">
+                  Cart ({count})
+                </Link>
+              )}
               <Link
                 href={user ? "/account" : "/login"}
                 className="rounded-sm px-3 py-3 text-sm font-medium hover:bg-accent"
@@ -164,20 +166,28 @@ export function SiteHeader() {
             </Link>
           </Button>
           <ThemeToggle className="hidden md:inline-flex" />
-          <Button variant="ghost" size="icon" asChild className="relative" aria-label={`Cart, ${count} items`}>
-            <Link href="/cart">
-              <ShoppingBag className="size-5" aria-hidden />
-              {count > 0 && (
-                <Badge className="absolute -right-1 -top-1 size-5 justify-center rounded-full p-0 text-[10px]">
-                  {count > 99 ? "99+" : count}
-                </Badge>
-              )}
-            </Link>
-          </Button>
+          {!isAdmin && (
+            <Button variant="ghost" size="icon" asChild className="relative" aria-label={`Cart, ${count} items`}>
+              <Link href="/cart">
+                <ShoppingBag className="size-5" aria-hidden />
+                {count > 0 && (
+                  <Badge className="absolute -right-1 -top-1 size-5 justify-center rounded-full p-0 text-[10px]">
+                    {count > 99 ? "99+" : count}
+                  </Badge>
+                )}
+              </Link>
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Account menu">
-                <User className="size-5" aria-hidden />
+              <Button variant="ghost" size="icon" aria-label="Account menu" className="rounded-full">
+                {user ? (
+                  <span className="flex size-8 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                    {getInitials(profile, user)}
+                  </span>
+                ) : (
+                  <User className="size-5" aria-hidden />
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">

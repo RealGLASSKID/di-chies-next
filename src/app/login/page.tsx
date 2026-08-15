@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { GoogleIcon } from "@/components/auth/GoogleIcon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { resolveAuthDestination } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 function LoginPage() {
@@ -22,14 +23,16 @@ function LoginPage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      setLoading(false);
       toast.error(error.message);
       return;
     }
+    const destination = await resolveAuthDestination(data.user?.id);
+    setLoading(false);
     toast.success("Welcome back to DI CHIES.");
-    router.push("/account");
+    router.push(destination);
   }
 
   async function handleGoogleSignIn() {
@@ -37,7 +40,7 @@ function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/account`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (error) {
