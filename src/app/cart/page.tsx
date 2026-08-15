@@ -41,7 +41,7 @@ function CartPage() {
     }));
   }, [profile]);
 
-  async function submitBooking(event: React.FormEvent) {
+  async function submitBooking(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user) {
       toast.error("Please sign in to complete your booking.");
@@ -49,10 +49,17 @@ function CartPage() {
       return;
     }
 
-    const name = form.name.trim();
-    const phone = form.phone.trim();
-    const date = form.date.trim();
-    const time = form.time.trim();
+    // Read straight from the DOM instead of React state. Native
+    // <input type="date"> / <input type="time"> can visually show a value
+    // (picker selection, autofill, some mobile keyboards) without their
+    // onChange having fired, which left form.date/form.time stuck at "".
+    // FormData always reflects what's actually in the fields right now.
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("name") ?? "").trim();
+    const phone = String(formData.get("phone") ?? "").trim();
+    const date = String(formData.get("date") ?? "").trim();
+    const time = String(formData.get("time") ?? "").trim();
+    const notes = String(formData.get("notes") ?? "").trim();
 
     if (!name || !phone || !date || !time) {
       toast.error("Name, phone, collection date and time are required.");
@@ -68,7 +75,7 @@ function CartPage() {
           customer_name: name.slice(0, 120),
           customer_phone: phone.slice(0, 30),
           customer_email: user.email ?? "",
-          notes: [`Collection: ${date} ${time}`, form.notes.trim()]
+          notes: [`Collection: ${date} ${time}`, notes]
             .filter(Boolean)
             .join(" — ")
             .slice(0, 500),
@@ -215,6 +222,7 @@ function CartPage() {
               <Label htmlFor="booking-name">Full name</Label>
               <Input
                 id="booking-name"
+                name="name"
                 required
                 maxLength={120}
                 value={form.name}
@@ -227,6 +235,7 @@ function CartPage() {
               <Label htmlFor="booking-phone">Phone number</Label>
               <Input
                 id="booking-phone"
+                name="phone"
                 required
                 maxLength={30}
                 value={form.phone}
@@ -240,6 +249,7 @@ function CartPage() {
                 <Label htmlFor="booking-date">Date</Label>
                 <Input
                   id="booking-date"
+                  name="date"
                   type="date"
                   required
                   value={form.date}
@@ -252,6 +262,7 @@ function CartPage() {
                 <Label htmlFor="booking-time">Time</Label>
                 <Input
                   id="booking-time"
+                  name="time"
                   type="time"
                   required
                   value={form.time}
@@ -265,6 +276,7 @@ function CartPage() {
               <Label htmlFor="booking-notes">Notes (optional)</Label>
               <Textarea
                 id="booking-notes"
+                name="notes"
                 maxLength={500}
                 value={form.notes}
                 onChange={(e) =>

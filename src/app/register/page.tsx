@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { Button } from "@/components/ui/button";
+import { GoogleIcon } from "@/components/auth/GoogleIcon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 function RegisterPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
@@ -35,6 +37,22 @@ function RegisterPage() {
     toast.success("Check your email to confirm your DI CHIES account.");
   }
 
+  async function handleGoogleSignUp() {
+    setGoogleLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/account`,
+      },
+    });
+    if (error) {
+      setGoogleLoading(false);
+      toast.error(error.message);
+    }
+    // On success the browser is redirected to Google, so no further
+    // state update happens here.
+  }
+
   return (
     <SiteLayout>
       <div className="container-page flex justify-center py-16">
@@ -46,7 +64,22 @@ function RegisterPage() {
             </p>
           ) : (
             <>
-              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-6 w-full gap-2"
+                disabled={googleLoading}
+                onClick={handleGoogleSignUp}
+              >
+                <GoogleIcon className="h-4 w-4" />
+                {googleLoading ? "Redirecting…" : "Continue with Google"}
+              </Button>
+              <div className="my-6 flex items-center gap-3 text-xs uppercase text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />
+                or
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="reg-name">Full name</Label>
                   <Input
