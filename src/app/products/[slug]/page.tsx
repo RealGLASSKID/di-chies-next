@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Minus, Plus, Store } from "lucide-react";
-
+import { useAuth } from "@/hooks/useAuth";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { ProductGrid } from "@/components/products/ProductGrid";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,8 @@ function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: product, isPending } = useQuery(productBySlugQuery(slug));
   const { data: categories } = useQuery(categoriesQuery);
-  const { addItem, isAdmin } = useCart();
+  const { addItem, } = useCart();
+  const { isAdmin } = useAuth();
   const [quantity, setQuantity] = useState(1);
   const [active, setActive] = useState(0);
 

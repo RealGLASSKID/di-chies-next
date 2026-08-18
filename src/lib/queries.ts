@@ -34,6 +34,7 @@ export const subcategoriesQuery = queryOptions({
   },
 });
 
+/** Active promotions for homepage (admin-flagged active). Ended ones still returned so UI can show "Ended". */
 export const promotionsQuery = queryOptions({
   queryKey: ["promotions"],
   staleTime: 5 * 60_000,
@@ -42,11 +43,46 @@ export const promotionsQuery = queryOptions({
       .from("promotions")
       .select("*")
       .eq("is_active", true)
-      .order("created_at");
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return data;
   },
 });
+
+export function promotionByIdQuery(id: string) {
+  return queryOptions({
+    queryKey: ["promotion", id],
+    queryFn: async (): Promise<Promotion | null> => {
+      const { data, error } = await supabase.from("promotions").select("*").eq("id", id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** Products attached to a promotion (via promotion_products). */
+export function promotionProductsQuery(promotionId: string) {
+  return queryOptions({
+    queryKey: ["promotion-products", promotionId],
+    queryFn: async (): Promise<Product[]> => {
+      const { data: links, error: linkError } = await supabase
+        .from("promotion_products")
+        .select("product_id")
+        .eq("promotion_id", promotionId);
+      if (linkError) throw linkError;
+      const ids = (links ?? []).map((row) => row.product_id as string);
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase
+        .from("products")
+        .select(PRODUCT_FIELDS)
+        .in("id", ids)
+        .eq("is_available", true)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Product[];
+    },
+  });
+}
 
 export type ProductSort = "newest" | "popular" | "price-asc" | "price-desc" | "name-asc";
 

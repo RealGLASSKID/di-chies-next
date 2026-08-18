@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Tag,
+  ImageIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -121,7 +122,7 @@ export function AdminShell({
         })}
       </nav>
 
-      <div className="space-y-1 border-t border-border p-3">
+      <div className="border-t border-border p-3 space-y-1">
         <div className="mb-2 rounded-md bg-muted/50 px-3 py-2">
           <p className="truncate text-sm font-medium">
             {profile?.full_name || user.email}
@@ -149,10 +150,12 @@ export function AdminShell({
 
   return (
     <div className="flex min-h-screen bg-muted/30">
+      {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-border lg:block">
         {Sidebar}
       </aside>
 
+      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
@@ -173,6 +176,7 @@ export function AdminShell({
         </div>
       )}
 
+      {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
           <Button

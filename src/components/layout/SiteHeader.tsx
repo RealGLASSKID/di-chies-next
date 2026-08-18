@@ -44,7 +44,7 @@ export function Wordmark({ className }: { className?: string }) {
 export function SiteHeader() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { count, isAdmin } = useCart();
+  const { count } = useCart();
   const { user, profile, isAdmin } = useAuth();
   const { data: categories } = useQuery(categoriesQuery);
   const [term, setTerm] = useState("");
@@ -200,9 +200,11 @@ export function SiteHeader() {
                   <DropdownMenuItem asChild>
                     <Link href="/account">My account</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/account/bookings">My bookings</Link>
-                  </DropdownMenuItem>
+                  {!isAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/account/bookings">My bookings</Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem asChild>
                     <Link href="/account/settings">Settings</Link>
                   </DropdownMenuItem>

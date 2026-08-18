@@ -271,6 +271,39 @@ export type Database = {
           },
         ]
       }
+      promotion_products: {
+        Row: {
+          created_at: string
+          product_id: string
+          promotion_id: string
+        }
+        Insert: {
+          created_at?: string
+          product_id: string
+          promotion_id: string
+        }
+        Update: {
+          created_at?: string
+          product_id?: string
+          promotion_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_products_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string

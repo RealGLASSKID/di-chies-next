@@ -12,6 +12,8 @@ type Profile = {
   email: string;
   phone: string;
   is_active: boolean;
+  notify_booking_updates: boolean;
+  notify_promotions: boolean;
   created_at: string;
 };
 
@@ -58,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("*").eq("id", userId!).maybeSingle();
       if (error) throw error;
-      return (data as Profile) ?? null;
+      return (data as unknown as Profile) ?? null;
     },
   });
 

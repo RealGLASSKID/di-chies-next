@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const BUCKET = "product-images";
-const MAX_BYTES = 2 * 1024 * 1024;
+const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 function publicUrl(path: string) {
@@ -37,12 +37,10 @@ export async function uploadProductImage(file: File, folder = "products") {
   });
 
   if (error) {
-    if (
-      error.message.toLowerCase().includes("bucket") ||
-      error.message.includes("not found")
-    ) {
+    // Common: bucket missing or RLS
+    if (error.message.toLowerCase().includes("bucket") || error.message.includes("not found")) {
       throw new Error(
-        'Storage bucket "product-images" not found. Run storage-setup.sql in Supabase first.',
+        "Storage bucket “product-images” not found. Run storage-setup.sql in Supabase first.",
       );
     }
     throw error;

@@ -7,20 +7,36 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProductImage } from "@/components/ui/product-image";
 import { useCart } from "@/hooks/useCart";
-import { discountPercent, effectivePrice, formatNaira } from "@/lib/format";
+import {
+  discountPercent,
+  discountPercentWithPromo,
+  effectivePrice,
+  formatNaira,
+  priceWithPromo,
+} from "@/lib/format";
 import type { Product } from "@/types/catalog";
 
 export function ProductCard({
   product,
   categoryName,
   onQuickView,
+  /** When set, price uses this promotion % (better of product discount vs promo). */
+  promoPercent,
+  /** When false, hide the Add button (e.g. ended promotion). */
+  allowAdd = true,
 }: {
   product: Product;
   categoryName?: string | undefined;
   onQuickView?: ((product: Product) => void) | undefined;
+  promoPercent?: number | null | undefined;
+  allowAdd?: boolean | undefined;
 }) {
-  const { addItem, isAdmin } = useCart();
-  const saving = discountPercent(product);
+  const { addItem } = useCart();
+  const hasPromo = promoPercent != null && promoPercent > 0;
+  const saving = hasPromo
+    ? discountPercentWithPromo(product, promoPercent)
+    : discountPercent(product);
+  const displayPrice = hasPromo ? priceWithPromo(product, promoPercent) : effectivePrice(product);
   const outOfStock = !product.is_available || product.stock_quantity <= 0;
 
   return (
@@ -67,14 +83,14 @@ export function ProductCard({
           {product.brand} · per {product.unit}
         </p>
         <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-base font-semibold">{formatNaira(effectivePrice(product))}</span>
+          <span className="text-base font-semibold">{formatNaira(displayPrice)}</span>
           {saving && (
             <span className="text-xs text-muted-foreground line-through">{formatNaira(product.price)}</span>
           )}
         </div>
 
         <div className="mt-4 flex items-center gap-2">
-          {!isAdmin && (
+          {allowAdd && (
             <Button
               size="sm"
               className="flex-1"

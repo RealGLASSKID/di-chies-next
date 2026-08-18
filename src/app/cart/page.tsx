@@ -19,7 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { effectivePrice, formatNaira } from "@/lib/format";
 
 function CartPage() {
-  const { lines, subtotal, setQuantity, removeItem, clear, isAdmin } = useCart();
+  const { lines, subtotal, setQuantity, removeItem, clear,} = useCart();
+  const { isAdmin } = useAuth();
   const { user, profile } = useAuth();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);

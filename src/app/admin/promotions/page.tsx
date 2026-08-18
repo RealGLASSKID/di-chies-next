@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { ImageUploadField } from "@/components/admin/ImageUploadField";
@@ -29,7 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { formatDate } from "@/lib/format";
+import { formatDate, isPromotionEnded, isPromotionLive } from "@/lib/format";
+import type { Product } from "@/types/catalog";
 
 type PromoRow = {
   id: string;
@@ -49,6 +50,7 @@ const emptyForm = {
   image_url: "",
   is_active: true,
   ends_at: "",
+  productIds: [] as string[],
 };
 
 export default function AdminPromotionsPage() {
@@ -57,6 +59,7 @@ export default function AdminPromotionsPage() {
   const [editing, setEditing] = useState<PromoRow | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
 
   const promos = useQuery({
     queryKey: ["admin-promotions"],
@@ -70,14 +73,69 @@ export default function AdminPromotionsPage() {
     },
   });
 
+  const allProducts = useQuery({
+    queryKey: ["admin-all-products-mini"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id,name,brand,price,discount_price,image_url,is_available,category_id")
+        .order("name")
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as Pick<
+        Product,
+        "id" | "name" | "brand" | "price" | "discount_price" | "image_url" | "is_available" | "category_id"
+      >[];
+    },
+  });
+
+  const productCounts = useQuery({
+    queryKey: ["admin-promo-product-counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("promotion_products").select("promotion_id");
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      for (const row of data ?? []) {
+        const id = row.promotion_id as string;
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+      return counts;
+    },
+  });
+
+  const filteredProducts = useMemo(() => {
+    const list = allProducts.data ?? [];
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return list.slice(0, 40);
+    return list
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.brand ?? "").toLowerCase().includes(q),
+      )
+      .slice(0, 40);
+  }, [allProducts.data, productSearch]);
+
+  const selectedProducts = useMemo(() => {
+    const list = allProducts.data ?? [];
+    const set = new Set(form.productIds);
+    return list.filter((p) => set.has(p.id));
+  }, [allProducts.data, form.productIds]);
+
   function openCreate() {
     setEditing(null);
     setForm(emptyForm);
+    setProductSearch("");
     setOpen(true);
   }
 
-  function openEdit(p: PromoRow) {
+  async function openEdit(p: PromoRow) {
     setEditing(p);
+    setProductSearch("");
+    const { data: links } = await supabase
+      .from("promotion_products")
+      .select("product_id")
+      .eq("promotion_id", p.id);
     setForm({
       title: p.title,
       description: p.description ?? "",
@@ -85,8 +143,19 @@ export default function AdminPromotionsPage() {
       image_url: p.image_url ?? "",
       is_active: p.is_active,
       ends_at: p.ends_at ? p.ends_at.slice(0, 10) : "",
+      productIds: (links ?? []).map((l) => l.product_id as string),
     });
     setOpen(true);
+  }
+
+  function toggleProduct(id: string) {
+    setForm((f) => {
+      const has = f.productIds.includes(id);
+      return {
+        ...f,
+        productIds: has ? f.productIds.filter((x) => x !== id) : [...f.productIds, id],
+      };
+    });
   }
 
   async function save() {
@@ -94,32 +163,64 @@ export default function AdminPromotionsPage() {
       toast.error("Title is required");
       return;
     }
+    const pct = Number(form.discount_percent);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      toast.error("Discount % must be between 0 and 100");
+      return;
+    }
+    if (form.productIds.length === 0) {
+      toast.error("Select at least one product for this promotion");
+      return;
+    }
+
     setSaving(true);
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
-      discount_percent: Number(form.discount_percent) || 0,
+      discount_percent: pct,
       image_url: form.image_url.trim() || null,
       is_active: form.is_active,
-      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+      ends_at: form.ends_at ? new Date(form.ends_at + "T23:59:59").toISOString() : null,
     };
 
-    const { error } = editing
-      ? await supabase.from("promotions").update(payload).eq("id", editing.id)
-      : await supabase.from("promotions").insert(payload);
+    try {
+      let promoId = editing?.id;
+      if (editing) {
+        const { error } = await supabase.from("promotions").update(payload).eq("id", editing.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from("promotions").insert(payload).select("id").single();
+        if (error) throw error;
+        promoId = data.id;
+      }
 
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+      if (!promoId) throw new Error("Missing promotion id");
+
+      // Replace product links
+      await supabase.from("promotion_products").delete().eq("promotion_id", promoId);
+      if (form.productIds.length > 0) {
+        const rows = form.productIds.map((product_id) => ({
+          promotion_id: promoId!,
+          product_id,
+        }));
+        const { error: linkError } = await supabase.from("promotion_products").insert(rows);
+        if (linkError) throw linkError;
+      }
+
+      toast.success(editing ? "Promotion updated" : "Promotion created");
+      setOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-promo-product-counts"] });
+      await queryClient.invalidateQueries({ queryKey: ["promotions"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save promotion");
+    } finally {
+      setSaving(false);
     }
-    toast.success(editing ? "Promotion updated" : "Promotion created");
-    setOpen(false);
-    await queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
   }
 
-  async function remove(id: string, title: string) {
-    if (!confirm(`Delete promotion “${title}”?`)) return;
+  async function remove(id: string) {
+    if (!confirm("Delete this promotion? Products stay in the catalogue.")) return;
     const { error } = await supabase.from("promotions").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -127,111 +228,84 @@ export default function AdminPromotionsPage() {
     }
     toast.success("Promotion deleted");
     await queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin-promo-product-counts"] });
+    await queryClient.invalidateQueries({ queryKey: ["promotions"] });
   }
 
   return (
     <AdminShell
       title="Promotions"
-      description="Homepage and deals banners with discount highlights."
+      description="Create offers, pick the products that belong to each one, and set one discount % for the whole promotion."
       actions={
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="mr-1.5 size-4" />
+        <Button onClick={openCreate}>
+          <Plus className="mr-1 size-4" />
           Add promotion
         </Button>
       }
     >
-      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
+      <div className="rounded-md border border-border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-14">Image</TableHead>
               <TableHead>Title</TableHead>
               <TableHead>Discount</TableHead>
+              <TableHead>Products</TableHead>
               <TableHead>Ends</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-28">Actions</TableHead>
+              <TableHead className="w-[100px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {promos.isLoading && (
+            {(promos.data ?? []).map((p) => {
+              const ended = isPromotionEnded(p);
+              const live = isPromotionLive(p);
+              return (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium">{p.title}</TableCell>
+                  <TableCell>{Number(p.discount_percent)}%</TableCell>
+                  <TableCell>{productCounts.data?.[p.id] ?? 0}</TableCell>
+                  <TableCell>{p.ends_at ? formatDate(p.ends_at) : "—"}</TableCell>
+                  <TableCell>
+                    {live ? (
+                      <Badge className="rounded-sm">Live</Badge>
+                    ) : ended ? (
+                      <Badge variant="secondary" className="rounded-sm">
+                        Ended
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="rounded-sm">
+                        Inactive
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => void openEdit(p)}>
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => void remove(p.id)}>
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {!promos.isPending && (promos.data?.length ?? 0) === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
-                  Loading…
+                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                  No promotions yet. Create one and attach products.
                 </TableCell>
               </TableRow>
             )}
-            {!promos.isLoading && (promos.data?.length ?? 0) === 0 && (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-10 text-center text-muted-foreground"
-                >
-                  No promotions yet.
-                </TableCell>
-              </TableRow>
-            )}
-            {promos.data?.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell>
-                  <div className="size-10 overflow-hidden rounded-md border border-border bg-muted">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={
-                        p.image_url ||
-                        "https://placehold.co/80x80/e4e4e7/18181b?text=—"
-                      }
-                      alt=""
-                      className="size-full object-cover"
-                    />
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="font-medium">{p.title}</div>
-                  <div className="line-clamp-1 text-xs text-muted-foreground">
-                    {p.description}
-                  </div>
-                </TableCell>
-                <TableCell>{Number(p.discount_percent)}%</TableCell>
-                <TableCell className="text-sm">
-                  {p.ends_at ? formatDate(p.ends_at) : "—"}
-                </TableCell>
-                <TableCell>
-                  {p.is_active ? (
-                    <Badge variant="secondary">Active</Badge>
-                  ) : (
-                    <Badge variant="outline">Off</Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => openEdit(p)}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => void remove(p.id, p.title)}
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
           </TableBody>
         </Table>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {editing ? "Edit promotion" : "Add promotion"}
-            </DialogTitle>
+            <DialogTitle>{editing ? "Edit promotion" : "Add promotion"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <ImageUploadField
@@ -244,9 +318,8 @@ export default function AdminPromotionsPage() {
               <Label>Title *</Label>
               <Input
                 value={form.title}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, title: e.target.value }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="e.g. Back to School Bundle"
               />
             </div>
             <div className="grid gap-2">
@@ -254,25 +327,18 @@ export default function AdminPromotionsPage() {
               <Textarea
                 rows={2}
                 value={form.description}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, description: e.target.value }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label>Discount %</Label>
+                <Label>Discount % (same for all products)</Label>
                 <Input
                   type="number"
                   min={0}
                   max={100}
                   value={form.discount_percent}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      discount_percent: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, discount_percent: e.target.value }))}
                 />
               </div>
               <div className="grid gap-2">
@@ -280,21 +346,77 @@ export default function AdminPromotionsPage() {
                 <Input
                   type="date"
                   value={form.ends_at}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, ends_at: e.target.value }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, ends_at: e.target.value }))}
                 />
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={form.is_active}
-                onCheckedChange={(v) =>
-                  setForm((f) => ({ ...f, is_active: Boolean(v) }))
-                }
+                onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: Boolean(v) }))}
               />
               Active on storefront
             </label>
+
+            <div className="grid gap-2 border-t border-border pt-4">
+              <Label>Products in this promotion *</Label>
+              <p className="text-xs text-muted-foreground">
+                Customers who open this offer will only see these products, each at the promotion
+                discount above. A product can belong to more than one promotion.
+              </p>
+
+              {selectedProducts.length > 0 && (
+                <div className="flex flex-wrap gap-2 rounded-md border border-border bg-surface p-2">
+                  {selectedProducts.map((p) => (
+                    <Badge key={p.id} variant="secondary" className="gap-1 rounded-sm pr-1">
+                      {p.name}
+                      <button
+                        type="button"
+                        className="rounded-sm p-0.5 hover:bg-background"
+                        onClick={() => toggleProduct(p.id)}
+                        aria-label={`Remove ${p.name}`}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search products by name or brand…"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+                {filteredProducts.map((p) => {
+                  const checked = form.productIds.includes(p.id);
+                  return (
+                    <label
+                      key={p.id}
+                      className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-accent/40"
+                    >
+                      <Checkbox checked={checked} onCheckedChange={() => toggleProduct(p.id)} />
+                      <span className="flex-1 text-sm">
+                        {p.name}
+                        <span className="ml-2 text-xs text-muted-foreground">{p.brand}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+                {filteredProducts.length === 0 && (
+                  <p className="p-4 text-center text-sm text-muted-foreground">No products match.</p>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {form.productIds.length} product{form.productIds.length === 1 ? "" : "s"} selected
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>

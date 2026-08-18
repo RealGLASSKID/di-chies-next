@@ -1,0 +1,12 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Illustrated placeholder portrait of the store owner">
+  <rect width="400" height="400" fill="#18181b" />
+  <circle cx="200" cy="400" r="150" fill="#3f3f46" />
+  <circle cx="200" cy="175" r="88" fill="#e4c9a8" />
+  <path d="M112 175 C112 110 152 78 200 78 C248 78 288 110 288 175 C288 150 268 96 200 96 C132 96 112 150 112 175 Z" fill="#2b2320" />
+  <path d="M112 178 C108 150 118 100 172 90 C150 105 132 140 130 210 C118 205 112 195 112 178 Z" fill="#2b2320" />
+  <path d="M288 178 C292 150 282 100 228 90 C250 105 268 140 270 210 C282 205 288 195 288 178 Z" fill="#2b2320" />
+  <ellipse cx="170" cy="182" rx="6" ry="8" fill="#2b2320" />
+  <ellipse cx="230" cy="182" rx="6" ry="8" fill="#2b2320" />
+  <path d="M178 216 Q200 232 222 216" stroke="#7a4a35" strokeWidth="4" fill="none" strokeLinecap="round" />
+  <path d="M120 340 C120 280 155 250 200 250 C245 250 280 280 280 340 Z" fill="#f4f4f5" />
+</svg>

@@ -9,6 +9,7 @@ import { ProductGrid } from "@/components/products/ProductGrid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProductImage } from "@/components/ui/product-image";
+import { isPromotionEnded, isPromotionLive } from "@/lib/format";
 import { categoriesQuery, productsQuery, promotionsQuery } from "@/lib/queries";
 
 const STEPS = [
@@ -142,23 +143,33 @@ function HomePage() {
       {!!promotions?.length && (
         <section className="container-page pb-16">
           <div className="grid gap-4 lg:grid-cols-2">
-            {promotions.slice(0, 2).map((promotion) => (
-              <article
-                key={promotion.id}
-                className="flex flex-col justify-between gap-6 rounded-md border border-border bg-foreground p-8 text-background"
-              >
-                <div>
-                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] opacity-70">
-                    {`Save ${promotion.discount_percent}%`}
-                  </p>
-                  <h3 className="mt-3 font-display text-2xl font-bold">{promotion.title}</h3>
-                  <p className="mt-2 max-w-md text-sm opacity-80">{promotion.description}</p>
-                </div>
-                <Button variant="secondary" asChild className="w-fit">
-                  <Link href="/deals">Shop the offer</Link>
-                </Button>
-              </article>
-            ))}
+            {promotions.slice(0, 2).map((promotion) => {
+              const live = isPromotionLive(promotion);
+              const ended = isPromotionEnded(promotion);
+              return (
+                <article
+                  key={promotion.id}
+                  className="flex flex-col justify-between gap-6 rounded-md border border-border bg-foreground p-8 text-background"
+                >
+                  <div>
+                    <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] opacity-70">
+                      {ended
+                        ? "Offer ended"
+                        : live
+                          ? `Save ${promotion.discount_percent}%`
+                          : "Coming soon"}
+                    </p>
+                    <h3 className="mt-3 font-display text-2xl font-bold">{promotion.title}</h3>
+                    <p className="mt-2 max-w-md text-sm opacity-80">{promotion.description}</p>
+                  </div>
+                  <Button variant="secondary" asChild className="w-fit">
+                    <Link href={`/promotions/${promotion.id}`}>
+                      {ended ? "View products" : "Shop the offer"}
+                    </Link>
+                  </Button>
+                </article>
+              );
+            })}
           </div>
         </section>
       )}

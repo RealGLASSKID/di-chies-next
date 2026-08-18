@@ -22,6 +22,48 @@ export function discountPercent(product: {
   return Math.round(((price - discount) / price) * 100);
 }
 
+/** Price after applying a promotion percentage (takes the better of product discount vs promo). */
+export function priceWithPromo(
+  product: { price: number | string; discount_price?: number | string | null },
+  promoPercent: number | null | undefined,
+): number {
+  const base = effectivePrice(product);
+  if (promoPercent == null || promoPercent <= 0) return base;
+  const fromPromo = Number(product.price) * (1 - Number(promoPercent) / 100);
+  if (!Number.isFinite(fromPromo) || fromPromo <= 0) return base;
+  return Math.min(base, fromPromo);
+}
+
+/** Display % off when a promo is applied (uses the better deal). */
+export function discountPercentWithPromo(
+  product: { price: number | string; discount_price?: number | string | null },
+  promoPercent: number | null | undefined,
+): number | null {
+  const price = Number(product.price);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  const final = priceWithPromo(product, promoPercent);
+  if (final >= price) return null;
+  return Math.round(((price - final) / price) * 100);
+}
+
+/** Live = active flag on and within start/end window. */
+export function isPromotionLive(promo: {
+  is_active: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+}): boolean {
+  if (!promo.is_active) return false;
+  const now = Date.now();
+  if (promo.starts_at && new Date(promo.starts_at).getTime() > now) return false;
+  if (promo.ends_at && new Date(promo.ends_at).getTime() <= now) return false;
+  return true;
+}
+
+export function isPromotionEnded(promo: { ends_at?: string | null }): boolean {
+  if (!promo.ends_at) return false;
+  return new Date(promo.ends_at).getTime() <= Date.now();
+}
+
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const date = typeof value === "string" ? new Date(value) : value;

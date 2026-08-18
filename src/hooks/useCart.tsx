@@ -21,7 +21,6 @@ type CartContextValue = {
   count: number;
   subtotal: number;
   loading: boolean;
-  isAdmin: boolean;
   addItem: (product: Product, quantity?: number) => void;
   setQuantity: (productId: string, quantity: number) => void;
   removeItem: (productId: string) => void;
@@ -33,7 +32,6 @@ const CartContext = createContext<CartContextValue>({
   count: 0,
   subtotal: 0,
   loading: false,
-  isAdmin: false,
   addItem: () => {},
   setQuantity: () => {},
   removeItem: () => {},
@@ -54,7 +52,7 @@ function writeGuestCart(entries: Entries) {
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [guestEntries, setGuestEntries] = useState<Entries>({});
   const [hydrated, setHydrated] = useState(false);
@@ -102,7 +100,52 @@ export function CartProvider({ children }: { children: ReactNode }) {
     queryFn: async (): Promise<Product[]> => {
       const { data, error } = await supabase.from("products").select(PRODUCT_FIELDS).in("id", productIds);
       if (error) throw error;
-      return (data ?? []) as Product[];
+      const list = (data ?? []) as Product[];
+
+      // Apply best live promotion % so cart subtotal matches the promo page.
+      try {
+        const { data: links } = await supabase
+          .from("promotion_products")
+          .select("product_id, promotion_id")
+          .in("product_id", productIds);
+        if (!links?.length) return list;
+
+        const promoIds = Array.from(new Set(links.map((l) => l.promotion_id as string)));
+        const { data: promos } = await supabase
+          .from("promotions")
+          .select("id, discount_percent, is_active, starts_at, ends_at")
+          .in("id", promoIds);
+
+        const now = Date.now();
+        const liveById = new Map<string, number>();
+        for (const p of promos ?? []) {
+          if (!p.is_active) continue;
+          if (p.starts_at && new Date(p.starts_at).getTime() > now) continue;
+          if (p.ends_at && new Date(p.ends_at).getTime() <= now) continue;
+          liveById.set(p.id, Number(p.discount_percent) || 0);
+        }
+
+        const bestPct = new Map<string, number>();
+        for (const link of links) {
+          const pct = liveById.get(link.promotion_id as string);
+          if (pct == null || pct <= 0) continue;
+          const pid = link.product_id as string;
+          const prev = bestPct.get(pid) ?? 0;
+          if (pct > prev) bestPct.set(pid, pct);
+        }
+
+        return list.map((product) => {
+          const pct = bestPct.get(product.id);
+          if (!pct) return product;
+          const promoPrice = Number(product.price) * (1 - pct / 100);
+          const current = product.discount_price == null ? null : Number(product.discount_price);
+          if (current != null && current > 0 && current < promoPrice) return product;
+          if (promoPrice >= Number(product.price) || promoPrice <= 0) return product;
+          return { ...product, discount_price: Math.round(promoPrice * 100) / 100 };
+        });
+      } catch {
+        return list;
+      }
     },
   });
 
@@ -142,15 +185,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback(
     (product: Product, quantity = 1) => {
-      if (isAdmin) {
-        toast.error("You're signed in as the store admin — bookings are for customers only.");
-        return;
-      }
       const current = entries[product.id] ?? 0;
       updateEntry(product.id, current + quantity);
       toast.success(`${product.name} added to cart`);
     },
-    [entries, isAdmin, updateEntry],
+    [entries, updateEntry],
   );
 
   const removeItem = useCallback(
@@ -187,13 +226,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       count: Object.values(entries).reduce((sum, quantity) => sum + quantity, 0),
       subtotal: lines.reduce((sum, line) => sum + effectivePrice(line.product) * line.quantity, 0),
       loading: (!!userId && dbLoading) || productsLoading,
-      isAdmin,
       addItem,
       setQuantity: updateEntry,
       removeItem,
       clear,
     }),
-    [addItem, clear, dbLoading, entries, isAdmin, lines, productsLoading, removeItem, updateEntry, userId],
+    [addItem, clear, dbLoading, entries, lines, productsLoading, removeItem, updateEntry, userId],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
