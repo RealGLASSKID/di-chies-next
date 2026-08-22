@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Eye } from "lucide-react";
@@ -32,12 +33,14 @@ import {
   type BookingStatus,
 } from "@/lib/format";
 
-export default function AdminBookingsPage() {
+function AdminBookingsContent() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const userFilter = searchParams.get("user");
   const [filter, setFilter] = useState<BookingStatus | "all">("all");
 
   const bookings = useQuery({
-    queryKey: ["admin-bookings", filter],
+    queryKey: ["admin-bookings", filter, userFilter],
     queryFn: async () => {
       let q = supabase
         .from("bookings")
@@ -45,6 +48,7 @@ export default function AdminBookingsPage() {
         .order("created_at", { ascending: false })
         .limit(150);
       if (filter !== "all") q = q.eq("status", filter as BookingStatus);
+      if (userFilter) q = q.eq("user_id", userFilter);
       const { data, error } = await q;
       if (error) throw error;
       return data;
@@ -65,21 +69,35 @@ export default function AdminBookingsPage() {
   return (
     <AdminShell
       title="Bookings"
-      description="Click View to open full order details and line items."
+      description={
+        userFilter
+          ? "Showing bookings for one user. Clear the filter in the URL or open Bookings from the sidebar for all."
+          : "Click View to open full order details and line items."
+      }
       actions={
-        <Select value={filter} onValueChange={(v) => setFilter(v as BookingStatus | "all")}>
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Filter status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {BOOKING_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {statusLabels[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          {userFilter && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/admin/bookings">Clear user filter</Link>
+            </Button>
+          )}
+          <Select
+            value={filter}
+            onValueChange={(v) => setFilter(v as BookingStatus | "all")}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Filter status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {BOOKING_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {statusLabels[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       }
     >
       <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
@@ -88,11 +106,11 @@ export default function AdminBookingsPage() {
             <TableRow>
               <TableHead>Reference</TableHead>
               <TableHead>Customer</TableHead>
-              <TableHead>Placed</TableHead>
+              <TableHead>Date</TableHead>
               <TableHead>Items</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-24">Detail</TableHead>
+              <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -158,5 +176,19 @@ export default function AdminBookingsPage() {
         </Table>
       </div>
     </AdminShell>
+  );
+}
+
+export default function AdminBookingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <AdminShell title="Bookings" description="Loading…">
+          <p className="text-sm text-muted-foreground">Loading bookings…</p>
+        </AdminShell>
+      }
+    >
+      <AdminBookingsContent />
+    </Suspense>
   );
 }
