@@ -206,6 +206,9 @@ export function SiteHeader() {
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem asChild>
+                    <Link href="/account/wishlist">Wishlist</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
                     <Link href="/account/settings">Settings</Link>
                   </DropdownMenuItem>
                   {isAdmin && (

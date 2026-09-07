@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Eye, ShoppingBag } from "lucide-react";
+import { Eye, Heart, ShoppingBag } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProductImage } from "@/components/ui/product-image";
 import { useCart } from "@/hooks/useCart";
+import { useWishlist } from "@/hooks/useWishlist";
 import {
   discountPercent,
   discountPercentWithPromo,
@@ -15,6 +16,7 @@ import {
   priceWithPromo,
 } from "@/lib/format";
 import type { Product } from "@/types/catalog";
+import { cn } from "@/lib/utils";
 
 export function ProductCard({
   product,
@@ -32,6 +34,8 @@ export function ProductCard({
   allowAdd?: boolean | undefined;
 }) {
   const { addItem } = useCart();
+  const { isWished, toggle } = useWishlist();
+  const wished = isWished(product.id);
   const hasPromo = promoPercent != null && promoPercent > 0;
   const saving = hasPromo
     ? discountPercentWithPromo(product, promoPercent)
@@ -72,6 +76,23 @@ export function ProductCard({
         )}
       </Link>
 
+      {/* Wishlist heart — outside the product link so it doesn't navigate */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggle(product);
+        }}
+        className={cn(
+          "absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-full border border-border bg-card/90 shadow-sm transition-colors hover:bg-card",
+          wished && "text-red-500",
+        )}
+        aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
+      >
+        <Heart className={cn("size-4", wished && "fill-current")} />
+      </button>
+
       <div className="flex flex-1 flex-col gap-1 p-4">
         {categoryName && <span className="eyebrow">{categoryName}</span>}
         <h3 className="text-sm font-semibold leading-snug">
@@ -85,7 +106,9 @@ export function ProductCard({
         <div className="mt-2 flex items-baseline gap-2">
           <span className="text-base font-semibold">{formatNaira(displayPrice)}</span>
           {saving && (
-            <span className="text-xs text-muted-foreground line-through">{formatNaira(product.price)}</span>
+            <span className="text-xs text-muted-foreground line-through">
+              {formatNaira(product.price)}
+            </span>
           )}
         </div>
 

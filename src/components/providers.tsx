@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/hooks/useAuth";
 import { CartProvider } from "@/hooks/useCart";
+import { WishlistProvider } from "@/hooks/useWishlist";
 import { ThemeProvider } from "@/lib/theme";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -27,8 +28,10 @@ export function Providers({ children }: { children: ReactNode }) {
       <ThemeProvider>
         <AuthProvider>
           <CartProvider>
-            {children}
-            <Toaster richColors position="top-center" />
+            <WishlistProvider>
+              {children}
+              <Toaster richColors position="top-center" />
+            </WishlistProvider>
           </CartProvider>
         </AuthProvider>
       </ThemeProvider>

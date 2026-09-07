@@ -1,14 +1,24 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Phone, Mail, FileText, Package } from "lucide-react";
+import {
+  ArrowLeft,
+  Phone,
+  Mail,
+  FileText,
+  Package,
+  History,
+  StickyNote,
+  Loader2,
+} from "lucide-react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -33,6 +43,7 @@ import {
   statusLabels,
   type BookingStatus,
 } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 type BookingItem = {
   id: string;
@@ -52,6 +63,7 @@ type BookingRow = {
   customer_email: string;
   customer_phone: string;
   notes: string;
+  admin_notes: string | null;
   status: BookingStatus;
   total: number;
   item_count: number;
@@ -60,6 +72,35 @@ type BookingRow = {
   booking_items: BookingItem[] | null;
 };
 
+type HistoryRow = {
+  id: string;
+  booking_id: string;
+  from_status: BookingStatus | null;
+  to_status: BookingStatus;
+  changed_by: string | null;
+  note: string;
+  created_at: string;
+};
+
+function statusBadgeClass(status: BookingStatus): string {
+  switch (status) {
+    case "pending":
+      return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200";
+    case "confirmed":
+      return "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200";
+    case "preparing":
+      return "bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-200";
+    case "ready_for_collection":
+      return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200";
+    case "collected":
+      return "bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200";
+    case "cancelled":
+      return "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200";
+    default:
+      return "";
+  }
+}
+
 export default function AdminBookingDetailPage({
   params,
 }: {
@@ -67,6 +108,9 @@ export default function AdminBookingDetailPage({
 }) {
   const { id } = use(params);
   const queryClient = useQueryClient();
+  const [adminNotesDraft, setAdminNotesDraft] = useState<string | null>(null);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [statusNote, setStatusNote] = useState("");
 
   const booking = useQuery({
     queryKey: ["admin-booking", id],
@@ -81,16 +125,64 @@ export default function AdminBookingDetailPage({
     },
   });
 
+  const history = useQuery({
+    queryKey: ["admin-booking-history", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("booking_status_history")
+        .select("*")
+        .eq("booking_id", id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as HistoryRow[];
+    },
+  });
+
   async function updateStatus(status: BookingStatus) {
     const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
     if (error) {
       toast.error(error.message);
       return;
     }
+    // Optional extra note on the latest history row
+    if (statusNote.trim()) {
+      const { data: latest } = await supabase
+        .from("booking_status_history")
+        .select("id")
+        .eq("booking_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latest?.id) {
+        await supabase
+          .from("booking_status_history")
+          .update({ note: statusNote.trim() })
+          .eq("id", latest.id);
+      }
+      setStatusNote("");
+    }
     await queryClient.invalidateQueries({ queryKey: ["admin-booking", id] });
+    await queryClient.invalidateQueries({ queryKey: ["admin-booking-history", id] });
     await queryClient.invalidateQueries({ queryKey: ["admin-bookings"] });
     await queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
     toast.success(`Status set to ${statusLabels[status]}`);
+  }
+
+  async function saveAdminNotes() {
+    if (adminNotesDraft === null) return;
+    setSavingNotes(true);
+    const { error } = await supabase
+      .from("bookings")
+      .update({ admin_notes: adminNotesDraft })
+      .eq("id", id);
+    setSavingNotes(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["admin-booking", id] });
+    setAdminNotesDraft(null);
+    toast.success("Admin notes saved");
   }
 
   if (booking.isLoading) {
@@ -123,6 +215,8 @@ export default function AdminBookingDetailPage({
   const b = booking.data;
   const items = b.booking_items ?? [];
   const itemsTotal = items.reduce((sum, row) => sum + Number(row.subtotal), 0);
+  const notesValue = adminNotesDraft ?? b.admin_notes ?? "";
+  const historyRows = history.data ?? [];
 
   return (
     <AdminShell
@@ -178,19 +272,34 @@ export default function AdminBookingDetailPage({
               Status
             </h2>
             <div className="mt-3">
-              <Badge variant="secondary" className="text-sm">
+              <Badge className={cn("text-sm", statusBadgeClass(b.status))}>
                 {statusLabels[b.status] ?? b.status}
               </Badge>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
               Last updated {formatDateTime(b.updated_at)}
             </p>
+            <div className="mt-4 space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">
+                Optional note for this status change
+              </label>
+              <Textarea
+                value={statusNote}
+                onChange={(e) => setStatusNote(e.target.value)}
+                placeholder="e.g. Customer called — items packed"
+                rows={2}
+                className="text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Saved onto the timeline when you change status above.
+              </p>
+            </div>
           </section>
 
           <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               <FileText className="size-4" />
-              Notes
+              Customer notes
             </h2>
             <p className="mt-3 whitespace-pre-wrap text-sm">
               {b.notes?.trim() || "No notes from customer."}
@@ -201,49 +310,100 @@ export default function AdminBookingDetailPage({
           </section>
 
           <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Totals
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <StickyNote className="size-4" />
+              Admin notes (internal)
             </h2>
-            <dl className="mt-3 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Line items</dt>
-                <dd>{items.length}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Units</dt>
-                <dd>{b.item_count}</dd>
-              </div>
-              <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
-                <dt>Order total</dt>
-                <dd>{formatNaira(Number(b.total))}</dd>
-              </div>
-            </dl>
+            <Textarea
+              value={notesValue}
+              onChange={(e) => setAdminNotesDraft(e.target.value)}
+              placeholder="Staff-only notes — not shown to the customer"
+              rows={4}
+              className="mt-3 text-sm"
+            />
+            <div className="mt-2 flex justify-end">
+              <Button
+                size="sm"
+                disabled={adminNotesDraft === null || savingNotes}
+                onClick={() => void saveAdminNotes()}
+              >
+                {savingNotes && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+                Save notes
+              </Button>
+            </div>
           </section>
         </div>
 
-        <div className="lg:col-span-2">
-          <section className="rounded-lg border border-border bg-card shadow-sm">
-            <div className="flex items-center gap-2 border-b border-border px-5 py-4">
-              <Package className="size-4 text-muted-foreground" />
-              <h2 className="font-semibold">Order items</h2>
-              <span className="text-sm text-muted-foreground">
-                ({items.length} line{items.length === 1 ? "" : "s"})
-              </span>
-            </div>
-
-            {items.length === 0 ? (
-              <p className="p-6 text-sm text-muted-foreground">
-                No line items found for this booking.
+        <div className="lg:col-span-2 space-y-6">
+          {/* Status timeline */}
+          <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <History className="size-4" />
+              Status history
+            </h2>
+            {history.isLoading && (
+              <p className="text-sm text-muted-foreground">Loading timeline…</p>
+            )}
+            {!history.isLoading && historyRows.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No history yet. Change the status above to start the timeline.
               </p>
+            )}
+            {historyRows.length > 0 && (
+              <ol className="relative space-y-0 border-l border-border ml-2">
+                {historyRows.map((row, idx) => {
+                  const isLast = idx === historyRows.length - 1;
+                  return (
+                    <li key={row.id} className="relative pb-6 pl-6 last:pb-0">
+                      <span
+                        className={cn(
+                          "absolute -left-1.5 top-1.5 size-3 rounded-full border-2 border-background",
+                          isLast ? "bg-primary" : "bg-muted-foreground/40",
+                        )}
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant="secondary"
+                          className={cn("text-xs", statusBadgeClass(row.to_status))}
+                        >
+                          {statusLabels[row.to_status] ?? row.to_status}
+                        </Badge>
+                        {row.from_status && (
+                          <span className="text-xs text-muted-foreground">
+                            from {statusLabels[row.from_status] ?? row.from_status}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDateTime(row.created_at)}
+                      </p>
+                      {row.note?.trim() && (
+                        <p className="mt-1 text-sm text-foreground/90">{row.note}</p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </section>
+
+          {/* Line items */}
+          <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <Package className="size-4" />
+              Items ({items.length})
+            </h2>
+            {items.length === 0 ? (
+              <EmptyState title="No items" description="This booking has no line items." />
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-14">Image</TableHead>
+                      <TableHead className="w-12" />
                       <TableHead>Product</TableHead>
                       <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Unit price</TableHead>
+                      <TableHead className="text-right">Unit</TableHead>
                       <TableHead className="text-right">Subtotal</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -294,9 +454,9 @@ export default function AdminBookingDetailPage({
             )}
           </section>
 
-          <p className="mt-4 text-xs text-muted-foreground">
-            Use the status dropdown above as you process the order: Pending → Confirmed →
-            Preparing → Ready for Collection → Collected.
+          <p className="text-xs text-muted-foreground">
+            Flow: Pending → Confirmed → Preparing → Ready for Collection → Collected.
+            Every status change is recorded in the timeline above.
           </p>
         </div>
       </div>

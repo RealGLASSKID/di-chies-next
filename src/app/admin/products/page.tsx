@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
@@ -106,7 +107,7 @@ function slugify(text: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export default function AdminProductsPage() {
+function AdminProductsContent() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ProductRow | null>(null);
@@ -114,6 +115,10 @@ export default function AdminProductsPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const searchParams = useSearchParams();
+  const [filterStock, setFilterStock] = useState<string>(
+    () => searchParams.get("stock") === "low" ? "low" : "all",
+  );
 
   const categories = useQuery({
     queryKey: ["admin-categories-list"],
@@ -266,6 +271,8 @@ export default function AdminProductsPage() {
     products.data?.filter((p) => {
       if (filterCategory !== "all" && p.category_id !== filterCategory)
         return false;
+      if (filterStock === "low" && p.stock_quantity > 5) return false;
+      if (filterStock === "out" && p.stock_quantity > 0) return false;
       if (!search.trim()) return true;
       const q = search.toLowerCase();
       return (
@@ -307,6 +314,16 @@ export default function AdminProductsPage() {
                 {c.name}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterStock} onValueChange={setFilterStock}>
+          <SelectTrigger className="w-full sm:w-44">
+            <SelectValue placeholder="Stock" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All stock levels</SelectItem>
+            <SelectItem value="low">Low stock (≤5)</SelectItem>
+            <SelectItem value="out">Out of stock</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-sm text-muted-foreground sm:ml-auto">
@@ -682,5 +699,19 @@ export default function AdminProductsPage() {
         </DialogContent>
       </Dialog>
     </AdminShell>
+  );
+}
+
+export default function AdminProductsPage() {
+  return (
+    <Suspense
+      fallback={
+        <AdminShell title="Products" description="Loading…">
+          <p className="text-sm text-muted-foreground">Loading products…</p>
+        </AdminShell>
+      }
+    >
+      <AdminProductsContent />
+    </Suspense>
   );
 }

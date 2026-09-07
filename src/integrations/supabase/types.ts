@@ -65,8 +65,47 @@ export type Database = {
           },
         ]
       }
+      booking_status_history: {
+        Row: {
+          id: string
+          booking_id: string
+          from_status: Database["public"]["Enums"]["booking_status"] | null
+          to_status: Database["public"]["Enums"]["booking_status"]
+          changed_by: string | null
+          note: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          booking_id: string
+          from_status?: Database["public"]["Enums"]["booking_status"] | null
+          to_status: Database["public"]["Enums"]["booking_status"]
+          changed_by?: string | null
+          note?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          booking_id?: string
+          from_status?: Database["public"]["Enums"]["booking_status"] | null
+          to_status?: Database["public"]["Enums"]["booking_status"]
+          changed_by?: string | null
+          note?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_status_history_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
+          admin_notes: string
           created_at: string
           customer_email: string
           customer_name: string
@@ -81,6 +120,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          admin_notes?: string
           created_at?: string
           customer_email?: string
           customer_name?: string
@@ -95,6 +135,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          admin_notes?: string
           created_at?: string
           customer_email?: string
           customer_name?: string
@@ -259,7 +300,7 @@ export type Database = {
             foreignKeyName: "products_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
-            referencedRelation: "categories"
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
@@ -311,6 +352,8 @@ export type Database = {
           full_name: string
           id: string
           is_active: boolean
+          notify_booking_updates: boolean
+          notify_promotions: boolean
           phone: string
           updated_at: string
         }
@@ -320,6 +363,8 @@ export type Database = {
           full_name?: string
           id: string
           is_active?: boolean
+          notify_booking_updates?: boolean
+          notify_promotions?: boolean
           phone?: string
           updated_at?: string
         }
@@ -329,6 +374,8 @@ export type Database = {
           full_name?: string
           id?: string
           is_active?: boolean
+          notify_booking_updates?: boolean
+          notify_promotions?: boolean
           phone?: string
           updated_at?: string
         }
@@ -428,6 +475,35 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      wishlists: {
+        Row: {
+          id: string
+          user_id: string
+          product_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          product_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          product_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wishlists_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
